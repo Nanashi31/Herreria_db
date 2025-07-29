@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="icon" type="image/png" href="https://img.icons8.com/color/48/000000/welder.png">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Herremex - Herrería Profesional</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background-color: #fffaf6; }
+    .btn-dark { background-color: #0c0a1f; border: none; }
+    .text-orange { color: #ff5e00; }
+    .rounded-soft { border-radius: 1.5rem; }
+    .shadow-soft { box-shadow: 0 0 20px rgba(0,0,0,0.1); }
+    .nav-tabs .nav-link.active { background-color: #0c0a1f; color: #fff; }
+    .hero-btn { scroll-behavior: smooth; }
+  </style>
+</head>
+<body>
+  <header class="container py-4">
+    <!-- HERO OMITIDO PARA BREVIDAD -->
+  </header>
+  <main class="container mt-5" id="crud">
+    <ul class="nav nav-tabs" id="crudTabs" role="tablist"></ul>
+    <div class="tab-content pt-4" id="crudContent"></div>
+  </main>
+
+  <script>
+    function filtrarTabla(id, texto) {
+      const filas = document.querySelectorAll(`#tabla_${id} tr`);
+      texto = texto.toLowerCase();
+      filas.forEach(fila => {
+        const visible = Array.from(fila.children).some(td =>
+          td.textContent.toLowerCase().includes(texto)
+        );
+        fila.style.display = visible ? '' : 'none';
+      });
+    }
+
+    function mostrarAlerta(mensaje, tipo = 'success') {
+      const alerta = document.createElement('div');
+      alerta.className = `alert alert-${tipo} alert-dismissible fade show mt-2`;
+      alerta.role = 'alert';
+      alerta.innerHTML = `${mensaje}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+      document.querySelector('#crud').prepend(alerta);
+      setTimeout(() => alerta.remove(), 5000);
+    }
+
+    function validarFormulario(id) {
+      const inputs = document.querySelectorAll(`#form_${id} input`);
+      for (const input of inputs) {
+        const label = input.placeholder;
+        const isEmpty = !input.value.trim();
+        const isInvalid = input.validity.patternMismatch || input.validity.typeMismatch;
+
+        const errorBox = document.getElementById(`error_${input.id}`);
+        if (errorBox) errorBox.style.display = 'none';
+
+        if (isEmpty) {
+          if (errorBox) {
+            errorBox.textContent = `El campo "${label}" es obligatorio.`;
+            errorBox.style.display = 'block';
+          }
+          input.focus();
+          return false;
+        }
+
+        if (isInvalid) {
+          let ejemplo = '';
+          if (input.type === 'email') ejemplo = 'Ej: ejemplo@correo.com';
+          else if (input.type === 'date') ejemplo = 'Ej: 2024-12-31';
+          else if (input.pattern) ejemplo = 'Sólo números y símbolos como () - +';
+          else if (input.type === 'number') ejemplo = 'Ej: 123.45';
+
+          if (errorBox) {
+            errorBox.textContent = `Formato incorrecto en "${label}". ${ejemplo}`;
+            errorBox.style.display = 'block';
+          }
+          input.focus();
+          return false;
+        }
+      }
+      return true;
+    }
+
+    function ejemploPlaceholder(baseName) {
+  if (baseName === 'Correo') return '(ejemplo@correo.com)';
+  if (baseName === 'Fec' || baseName === 'Fecha') return '(YYYY-MM-DD)';
+  if (baseName === 'Tel' || baseName === 'Cel') return '(Sólo números)';
+  if (baseName === 'Precio') return '(123.45)';
+  return '';
+}
+
+const modoEdicion = {};
+
+window.addEventListener('DOMContentLoaded', () => {
+      const inputTypes = {
+        Correo: 'email', Fec_Nac: 'date', Fecha: 'date', Precio: 'number',
+      };
+      const inputPatterns = {
+        Tel: '[0-9()+\-\s]+', Cel: '[0-9()+\-\s]+'
+      };
+
+      const sections = [
+        { id: 'clientes', title: 'Clientes', api: 'clientes', fields: ['Id_Cli', 'Nom', 'ApP', 'ApM', 'Cel', 'Dire'] },
+        { id: 'ordenes', title: 'Órdenes', api: 'ordenes', fields: ['Id_Ord', 'Tipo', 'Presupuesto', 'Id_Cliente', 'Fecha'] },
+        { id: 'inventario', title: 'Inventario', api: 'inventario', fields: ['Id_Mat', 'Nombre', 'Precio', 'Tipo'] },
+        { id: 'trabajadores', title: 'Trabajadores', api: 'trabajadores', fields: ['Id_Tra', 'Nom', 'ApP', 'ApM', 'Correo', 'Tel', 'Fec_Nac'] },
+        { id: 'orden_inv', title: 'Orden-Material', api: 'ordenes-materiales', fields: ['Id_Ord', 'Id_Mat', 'Usado'] }
+      ];
+
+      const tabList = document.getElementById('crudTabs');
+      const content = document.getElementById('crudContent');
+
+      sections.forEach(({ id, title }, index) => {
+        tabList.innerHTML += `<li class="nav-item"><button class="nav-link ${index === 0 ? 'active' : ''}" data-bs-toggle="tab" data-bs-target="#${id}-tab">${title}</button></li>`;
+        content.innerHTML += `<div class="tab-pane fade ${index === 0 ? 'show active' : ''}" id="${id}-tab"><div class="container py-4" id="${id}-section"></div></div>`;
+      });
+
+      sections.forEach(({ id, title, api, fields }) => {
+        modoEdicion[id] = false;
+        const sec = document.getElementById(`${id}-section`);
+        sec.innerHTML = `
+          <h2 class="mb-3">Gestión de ${title}</h2>
+          <div class="col-md-4 mb-2">
+            <input class="form-control" placeholder="Buscar" onkeyup="filtrarTabla('${id}', this.value)">
+          </div>
+          <form id="form_${id}" class="row g-2 mb-3">
+            ${fields.map(f => {
+              const baseName = f.split('_')[0];
+              const type = inputTypes[baseName] ? `type='${inputTypes[baseName]}'` : '';
+              const pattern = inputPatterns[baseName] ? `pattern='${inputPatterns[baseName]}'` : '';
+              const step = baseName === 'Precio' ? `step='0.01'` : '';
+              return `<div class='col-md-${12 / fields.length}'>
+                        <input class='form-control' id='${f}_${id}' placeholder='${f} ${ejemploPlaceholder(baseName)}' ${type} ${pattern} ${step} required>
+                        <div class='text-danger small' id='error_${f}_${id}' style='display:none'></div>
+                      </div>`;
+            }).join('')}
+            <div class="col-12"><button type="submit" class="btn btn-dark">Guardar</button></div>
+          </form>
+          <div class="table-responsive">
+            <table class="table table-bordered table-striped">
+              <thead class="table-dark"><tr>${fields.map(f => `<th>${f}</th>`).join('')}<th>Acciones</th></tr></thead>
+              <tbody id="tabla_${id}"></tbody>
+            </table>
+          </div>
+        `;
+
+        const apiUrl = `http://localhost:5000/${api}`;
+        const form = document.getElementById(`form_${id}`);
+        const tabla = document.getElementById(`tabla_${id}`);
+
+        const cargar = () => {
+          fetch(apiUrl)
+            .then(r => r.json())
+            .then(data => {
+              tabla.innerHTML = '';
+              data.forEach(item => {
+                tabla.innerHTML += `
+                  <tr>
+                    ${fields.map(f => `<td>${item[f]}</td>`).join('')}
+                    <td>
+                      <button class='btn btn-sm btn-warning' onclick='editar_${id}(${JSON.stringify(item)})'>Editar</button>
+                      <button class='btn btn-sm btn-danger' onclick='eliminar_${id}(${fields.map(f => `"${item[f]}"`).join(',')})'>Eliminar</button>
+                    </td>
+                  </tr>
+                `;
+              });
+            })
+            .catch(() => mostrarAlerta('No se pudo conectar al servidor.', 'danger'));
+        };
+
+        form.addEventListener('submit', e => {
+          e.preventDefault();
+          if (!validarFormulario(id)) return;
+          const datos = {};
+          fields.forEach(f => {
+            const input = document.getElementById(`${f}_${id}`);
+            if (input) datos[f] = input.value;
+          });
+
+          const esEdicion = modoEdicion[id];
+          const url = esEdicion && id !== 'orden_inv' ? `${apiUrl}/${datos[fields[0]]}` : apiUrl;
+          const metodo = esEdicion && id !== 'orden_inv' ? 'PUT' : 'POST';
+
+          fetch(url, {
+            method: metodo,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(datos)
+          })
+            .then(res => {
+              if (!res.ok) throw new Error();
+              form.reset();
+              modoEdicion[id] = false;
+              document.getElementById(`${fields[0]}_${id}`).removeAttribute('readonly');
+              document.querySelectorAll(`#form_${id} .text-danger`).forEach(e => e.style.display = 'none');
+              cargar();
+              mostrarAlerta('Guardado correctamente.');
+            })
+            .catch(() => mostrarAlerta('Error al guardar los datos.', 'danger'));
+        });
+
+        window[`editar_${id}`] = (obj) => {
+          modoEdicion[id] = true;
+          fields.forEach((f, i) => {
+            const input = document.getElementById(`${f}_${id}`);
+            if (input) {
+              input.value = obj[f];
+              if (i === 0 && id !== 'orden_inv') input.setAttribute('readonly', true);
+            }
+          });
+        };
+
+        window[`eliminar_${id}`] = (...ids) => {
+          const params = id === 'orden_inv' ? `?Id_Ord=${ids[0]}&Id_Mat=${ids[1]}` : `/${ids[0]}`;
+          fetch(`${apiUrl}${params}`, { method: 'DELETE' })
+            .then(() => {
+              cargar();
+              mostrarAlerta('Eliminado correctamente.');
+            })
+            .catch(() => mostrarAlerta('Error al eliminar.', 'danger'));
+        };
+
+        cargar();
+      });
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
