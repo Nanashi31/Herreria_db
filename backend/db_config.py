@@ -7,5 +7,6 @@ def get_connection():
         host="localhost",
         user="root",            # ← cambia si usas otro usuario
         password="1234",            # ← pon tu contraseña si tienes
-        database="herreriadb"
+        database="herreriadb",
+        auth_plugin='mysql_native_password'  # ← ✅ esto soluciona el error 2059
     )
